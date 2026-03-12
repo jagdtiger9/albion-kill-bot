@@ -1,13 +1,10 @@
-'use strict';
+export const FactionType = {
+    Alliance: 'alliance',
+    Guild: 'guild',
+    Unguilded: 'unguilded',
+};
 
-var FactionType;
-(function(FactionType) {
-    FactionType['Alliance'] = 'alliance';
-    FactionType['Guild'] = 'guild';
-    FactionType['Unguilded'] = 'unguilded';
-})(FactionType = exports.FactionType || (exports.FactionType = {}));
-
-class Faction {
+export default class Faction {
     static fromUnguilded(battleData) {
         const players = Object.values(battleData.players)
             .filter(player => player.guildName === '');
@@ -36,5 +33,3 @@ class Faction {
         this.players = factionLike.players;
     }
 }
-
-exports.default = Faction;

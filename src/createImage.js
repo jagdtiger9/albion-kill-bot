@@ -1,7 +1,5 @@
-'use strict';
-
-const Jimp = require('jimp');
-const config = require('../config');
+import Jimp from 'jimp';
+import { KILL_MIN_FAME } from '../config.js';
 
 const DIV_SIZE = 2;
 const FONT_SIZE = 32;
@@ -125,7 +123,7 @@ function createImage(target, event) {
             guildName = (event.Victim.AllianceName ? `[${event.Victim.AllianceName}]` : '') + event.Victim.GuildName;
             output.print(font, 4, FONT_SIZE + ITEM_SIZE + (FONT_SIZE - 18) / 2, guildName ? guildName : 'N/A');
 
-            if (event.TotalVictimKillFame < config.kill.minFame) {
+            if (event.TotalVictimKillFame < KILL_MIN_FAME) {
                 output.crop(0, 0, ITEM_SIZE * NUM, FONT_SIZE);
             }
             output.quality(60);
@@ -139,17 +137,9 @@ function createImage(target, event) {
             skull.resize(32, 32);
             output.composite(skull, ITEM_SIZE * NUM - FONT_SIZE - 5, ITEM_SIZE + FONT_SIZE);
 
-            return new Promise((resolve, reject) => {
-                output.getBuffer(Jimp.MIME_PNG, (err, buffer) => {
-                    if (err) {
-                        reject(err);
-                    } else {
-                        resolve(buffer);
-                    }
-                });
-            });
+            return output.getBufferAsync(Jimp.MIME_PNG);
         });
     });
 }
 
-module.exports = { createImage, getItemImage, getItemUrl };
+export { createImage, getItemImage, getItemUrl };

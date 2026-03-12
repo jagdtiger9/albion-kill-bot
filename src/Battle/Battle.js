@@ -1,10 +1,8 @@
-'use strict';
+import Alliance from './Alliance.js';
+import Faction from './Faction.js';
+import Guild from './Guild.js';
 
-const Alliance = require('./Alliance');
-const Faction = require('./Faction');
-const Guild = require('./Guild');
-
-module.exports = class Battle {
+export default class Battle {
     constructor(battleData) {
         this.rankedFactions = [];
         this.endTime = battleData.endTime;
@@ -14,21 +12,21 @@ module.exports = class Battle {
         this.players = Object.values(battleData.players);
         // Alliances
         const allianceArray = Object.values(battleData.alliances)
-            .map(allianceData => new Alliance.default(allianceData, battleData));
+            .map(allianceData => new Alliance(allianceData, battleData));
         this.alliances = new Map(allianceArray
             .map(alliance => [alliance.name, alliance]));
         // Guilds
         const guildArray = Object.values(battleData.guilds)
-            .map(guildData => new Guild.default(guildData, battleData));
+            .map(guildData => new Guild(guildData, battleData));
         this.guilds = new Map(guildArray
             .map(guild => [guild.name, guild]));
         // Factions
         this.rankedFactions = this.rankedFactions.concat(allianceArray
-            .map(alliance => new Faction.default(alliance)));
+            .map(alliance => new Faction(alliance)));
         this.rankedFactions = this.rankedFactions.concat(guildArray
             .filter(guild => guild.alliance === '')
-            .map(guild => new Faction.default(guild)));
-        const unguildedFaction = Faction.default.fromUnguilded(battleData);
+            .map(guild => new Faction(guild)));
+        const unguildedFaction = Faction.fromUnguilded(battleData);
         if (unguildedFaction.players.length) {
             this.rankedFactions.push(unguildedFaction);
         }
@@ -40,4 +38,4 @@ module.exports = class Battle {
             ? b.kills - a.kills
             : b.killFame - a.killFame);
     }
-};
+}

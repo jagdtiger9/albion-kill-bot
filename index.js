@@ -1,14 +1,13 @@
-'use strict';
+import { DISCORD_TOKEN } from './config.js';
+import { Client, GatewayIntentBits } from 'discord.js';
+import sqlite3pkg from 'sqlite3';
+import KillBotApi from './src/KillbotApi.js';
 
-const config = require('./config');
-const Discord = require('discord.js');
-const KillBotApi = require('./src/KillbotApi');
-const sqlite3 = require('sqlite3').verbose();
+const sqlite3 = sqlite3pkg.verbose();
+const bot = new Client({ intents: [GatewayIntentBits.Guilds] });
+const KillBot = new KillBotApi(bot, sqlite3);
 
-const bot = new Discord.Client();
-const KillBot = new KillBotApi(config, bot, sqlite3);
-
-bot.on('ready', () => {
+bot.once('clientReady', () => {
     console.log('Connected');
     console.log(`Logged in as: ${bot.user.username} - (${bot.user.id})`);
 
@@ -21,4 +20,4 @@ bot.on('ready', () => {
     KillBot.checkBattlesInterval(30000);
 });
 
-bot.login(config.discord.token);
+bot.login(DISCORD_TOKEN);

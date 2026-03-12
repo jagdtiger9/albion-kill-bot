@@ -1,10 +1,8 @@
-'use strict';
+import { FactionType } from './Faction.js';
 
-const Faction = require('./Faction');
-
-class Guild {
+export default class Guild {
     constructor(guildData, battleData) {
-        this.factionType = Faction.FactionType.Guild;
+        this.factionType = FactionType.Guild;
         this.alliance = guildData.alliance;
         this.deaths = guildData.deaths;
         this.killFame = guildData.killFame;
@@ -14,5 +12,3 @@ class Guild {
             .filter(player => player.guildName === guildData.name);
     }
 }
-
-exports.default = Guild;

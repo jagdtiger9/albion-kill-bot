@@ -1,22 +1,42 @@
+import { readFileSync, writeFileSync, existsSync } from 'fs';
+import { AttachmentBuilder } from 'discord.js';
+import {
+    TRACK_GUILDS,
+    KILL_MIN_FAME,
+    DISCORD_CHANNEL_ID,
+    BATTLE_MIN_PLAYER,
+    BATTLE_MIN_RELEVANT_PLAYER,
+} from '../config.js';
+import { createImage } from './createImage.js';
+import Battle from './Battle/Battle.js';
+import AlbionApi from './AlbionApi.js';
+
 const INFO_URL = 'https://www.albiononline2d.com/en/scoreboard';
-const { createImage } = require('./createImage');
+const DB_JSON_PATH = './database/.db.json';
 
-const FileSync = require('lowdb/adapters/FileSync');
-const low = require('lowdb');
-const adapter = new FileSync('./database/.db.json');
-const jsonDb = low(adapter);
+function loadJsonDb() {
+    if (!existsSync(DB_JSON_PATH)) {
+        const defaults = { recents: { battleId: 0, eventId: 0 } };
+        writeFileSync(DB_JSON_PATH, JSON.stringify(defaults));
+        return defaults;
+    }
+    return JSON.parse(readFileSync(DB_JSON_PATH, 'utf8'));
+}
 
-const Battle = require('./Battle/Battle');
-const AlbionApi = require('./AlbionApi');
+function saveJsonDb(data) {
+    writeFileSync(DB_JSON_PATH, JSON.stringify(data));
+}
 
-module.exports = class KillBot {
-    constructor(config, bot, sqlite3) {
-        this.config = config;
+export default class KillBot {
+    constructor(bot, sqlite3) {
+        this.jsonDb = loadJsonDb();
+        if (!this.jsonDb.recents) {
+            this.jsonDb.recents = { battleId: 0, eventId: 0 };
+            saveJsonDb(this.jsonDb);
+        }
 
-        jsonDb.defaults({ recents: { battleId: 0, eventId: 0 } }).write();
-        this.jsonDb = jsonDb;
-        this.lastEventId = jsonDb.get('recents.eventId').value() || 0;
-        this.lastBattleId = jsonDb.get('recents.battleId').value() || 0;
+        this.lastEventId = this.jsonDb.recents.eventId || 0;
+        this.lastBattleId = this.jsonDb.recents.battleId || 0;
 
         this.bot = bot;
         this.sqlite3 = sqlite3;
@@ -45,7 +65,7 @@ module.exports = class KillBot {
         this.albionApi.getEvents({ limit: 51, offset: startPos * 51 }).then(
             events => {
                 if (!events) {
-                    return this.resolve();
+                    return;
                 }
 
                 events.sort((a, b) => a.EventId - b.EventId);
@@ -64,12 +84,11 @@ module.exports = class KillBot {
                         && (!maxRangeId || event.EventId < maxRangeId)
                         && !range.includes(event.EventId)
                 ).filter(event => {
-                        const isFriendlyKill = this.config.guild.guilds.indexOf(event.Killer.GuildName) !== -1;
-                        const isFriendlyDeath = this.config.guild.guilds.indexOf(event.Victim.GuildName) !== -1;
+                    const isFriendlyKill = TRACK_GUILDS.indexOf(event.Killer.GuildName) !== -1;
+                    const isFriendlyDeath = TRACK_GUILDS.indexOf(event.Victim.GuildName) !== -1;
 
-                        return (isFriendlyKill || isFriendlyDeath) && event.TotalVictimKillFame > 1000;
-                    }
-                );
+                    return (isFriendlyKill || isFriendlyDeath) && event.TotalVictimKillFame > 1000;
+                });
                 events.forEach(event => {
                     this.sendKillReport(event);
                 });
@@ -85,7 +104,7 @@ module.exports = class KillBot {
     }
 
     sendKillReport(event, channelId) {
-        const isFriendlyKill = this.config.guild.guilds.indexOf(event.Killer.GuildName) !== -1;
+        const isFriendlyKill = TRACK_GUILDS.indexOf(event.Killer.GuildName) !== -1;
 
         createImage('Victim', event)
             .then(imgBufferVictim => {
@@ -100,7 +119,7 @@ module.exports = class KillBot {
                     image: { url: 'attachment://kill.png' },
                 };
 
-                if (event.TotalVictimKillFame > this.config.kill.minFame) {
+                if (event.TotalVictimKillFame > KILL_MIN_FAME) {
                     Object.assign(embed, {
                         title: `${event.Killer.Name} just killed ${event.Victim.Name}!`,
                         description: `Fame: **${event.TotalVictimKillFame.toLocaleString()}** ${assists ? '' : ' Solo kill'}`,
@@ -109,11 +128,10 @@ module.exports = class KillBot {
                     });
 
                     let assistant = event.Participants.reduce(
-                        function(accumulator, item) {
+                        function (accumulator, item) {
                             let record = item.DamageDone ? item.DamageDone : item.SupportHealingDone;
                             record = Math.round(record).toLocaleString() + ` - [${item.Name}](${INFO_URL}/players/${item.Id})`;
 
-                            // Ассист по дамагу
                             if (item.DamageDone) {
                                 accumulator.dd.push(record);
                             }
@@ -127,28 +145,25 @@ module.exports = class KillBot {
                     );
 
                     if (assistant.dd.length) {
-                        embed.fields.push(
-                            {
-                                name: 'Damage' + (assistant.dd.length > 1 ? ` + ${assistant.dd.length - 1}` : ''),
-                                value: assistant.dd.join('\n'),
-                                inline: true,
-                            }
-                        );
+                        embed.fields.push({
+                            name: 'Damage' + (assistant.dd.length > 1 ? ` + ${assistant.dd.length - 1}` : ''),
+                            value: assistant.dd.join('\n'),
+                            inline: true,
+                        });
                     }
                     if (assistant.heal.length) {
-                        embed.fields.push(
-                            {
-                                name: 'Heal',
-                                value: assistant.heal.join('\n'),
-                                inline: true,
-                            }
-                        );
+                        embed.fields.push({
+                            name: 'Heal',
+                            value: assistant.heal.join('\n'),
+                            inline: true,
+                        });
                     }
                 }
 
-                const files = [{ name: 'kill.png', attachment: imgBufferVictim }];
+                const attachment = new AttachmentBuilder(imgBufferVictim, { name: 'kill.png' });
 
-                return this.bot.channels.cache.get((channelId || this.config.discord.feedChannelId)).send({ embed, files });
+                return this.bot.channels.cache.get(channelId || DISCORD_CHANNEL_ID)
+                    .send({ embeds: [embed], files: [attachment] });
             })
             .then(() => {
                 this.log(`Successfully posted log of ${this.createDisplayName(event.Killer)} killing ${this.createDisplayName(event.Victim)}.`);
@@ -167,21 +182,17 @@ module.exports = class KillBot {
         this.log('Checking battles...');
         this.albionApi.getBattles({ limit: 20, offset: 0 }).then(battles => {
             battles
-                // Filter out battles that have already been processed
                 .filter(battleData => battleData.id > this.lastBattleId)
-                // Format the raw battle data into a more useful Battle object
                 .map(battleData => new Battle(battleData))
-                // Filter out battles with insigificant amounts of players
-                .filter(battle => battle.players.length >= this.config.battle.minPlayers)
-                // Filter out battles that don't involve a relevent number of guildmates
+                .filter(battle => battle.players.length >= BATTLE_MIN_PLAYER)
                 .filter(battle => {
-                    const relevantPlayerCount = this.config.guild.guilds.reduce((total, guildName) => {
+                    const relevantPlayerCount = TRACK_GUILDS.reduce((total, guildName) => {
                         return total + (battle.guilds.has(guildName)
                             ? battle.guilds.get(guildName).players.length
                             : 0);
                     }, 0);
 
-                    return relevantPlayerCount >= this.config.battle.minRelevantPlayers;
+                    return relevantPlayerCount >= BATTLE_MIN_RELEVANT_PLAYER;
                 }).forEach(battle => this.sendBattleReport(battle));
         }).catch(error => {
             this.log(error);
@@ -191,7 +202,8 @@ module.exports = class KillBot {
     sendBattleReport(battle, channelId) {
         if (battle.id > this.lastBattleId) {
             this.lastBattleId = battle.id;
-            this.jsonDb.set('recents.battleId', this.lastBattleId).write();
+            this.jsonDb.recents.battleId = this.lastBattleId;
+            saveJsonDb(this.jsonDb);
         }
 
         const title = battle.rankedFactions.slice()
@@ -217,7 +229,7 @@ module.exports = class KillBot {
                         .sort((a, b) => battle.guilds.get(b.name).players.length > battle.guilds.get(a.name).players.length)
                         .map(({ name }) => `${name} (${battle.guilds.get(name).players.length})`)
                         .join('\n'),
-                ].join('\n')
+                ].join('\n'),
             };
         });
 
@@ -230,12 +242,12 @@ module.exports = class KillBot {
                         .sort((a, b) => a.name.toLowerCase() < b.name.toLowerCase() ? -1 : 1)
                         .sort((a, b) => b.kills > a.kills)
                         .map(({ name, kills, deaths }) => `${deaths ? '~~' : ''}${name}${deaths ? '~~' : ''}: ${kills} Kills`)
-                        .join('\n')
+                        .join('\n'),
                 };
             });
         }
 
-        const didWin = battle.rankedFactions[0].name === this.config.guild.alliance;
+        const didWin = battle.rankedFactions[0].name === 'OLD';
 
         const embed = {
             url: `https://albiononline.com/en/killboard/battles/${battle.id}`,
@@ -252,11 +264,13 @@ module.exports = class KillBot {
             fields,
         };
 
-        this.bot.channels.cache.get(channelId || this.config.discord.feedChannelId).send({ embed }).then(() => {
-            this.log(`Successfully posted log of battle between ${title}.`);
-        }).catch(err => {
-            this.log(err);
-        });
+        this.bot.channels.cache.get(channelId || DISCORD_CHANNEL_ID)
+            .send({ embeds: [embed] })
+            .then(() => {
+                this.log(`Successfully posted log of battle between ${title}.`);
+            }).catch(err => {
+                this.log(err);
+            });
     }
 
     initDatabase() {
@@ -286,7 +300,7 @@ module.exports = class KillBot {
             sql = ' SELECT * FROM eventIds WHERE eventId>=? ';
             params = [minId];
         }
-        db.all(sql, params, function(err, rows) {
+        db.all(sql, params, function (err, rows) {
             if (err) {
                 console.error(err.message);
                 throw new Error(err.message);
@@ -310,9 +324,9 @@ module.exports = class KillBot {
         }
         // Последнее обработанное событие
         if (saveMaxId > this.lastEventId) {
-            // JSON db
             this.lastEventId = saveMaxId;
-            this.jsonDb.set('recents.eventId', saveMaxId).write();
+            this.jsonDb.recents.eventId = saveMaxId;
+            saveJsonDb(this.jsonDb);
         }
     }
 
@@ -336,4 +350,4 @@ module.exports = class KillBot {
     log() {
         console.log(new Date().toLocaleTimeString(), ...Array.from(arguments));
     }
-};
+}

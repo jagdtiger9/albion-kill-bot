@@ -3,6 +3,7 @@
     "version": "1.0.0",
     "description": "Discord killbot based on Ryan Rowland<ryan.w.rowland@gmail.com> realization",
     "main": "index.js",
+    "type": "module",
     "keywords": [
         "albion",
         "discord",
@@ -12,13 +13,11 @@
         "start": "node index.js"
     },
     "engines": {
-        "node": "8.4.0"
+        "node": ">=22.0.0"
     },
     "dependencies": {
-        "discord.js": "^12.2.0",
-        "jimp": "^0.10.3",
-        "lowdb": "^1.0.0",
-        "request": "^2.88.0",
-        "sqlite3": "^5.0.0"
+        "discord.js": "^14.0.0",
+        "jimp": "^0.22.12",
+        "sqlite3": "^5.1.7"
     }
 }
