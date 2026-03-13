@@ -1,5 +1,5 @@
-import { readFileSync, writeFileSync, existsSync } from 'fs';
-import { AttachmentBuilder } from 'discord.js';
+import {readFileSync, writeFileSync, existsSync} from 'fs';
+import {AttachmentBuilder} from 'discord.js';
 import {
     TRACK_GUILDS,
     KILL_MIN_FAME,
@@ -7,7 +7,7 @@ import {
     BATTLE_MIN_PLAYER,
     BATTLE_MIN_RELEVANT_PLAYER,
 } from '../config.js';
-import { createImage } from './createImage.js';
+import {createImage} from './createImage.js';
 import Battle from './Battle/Battle.js';
 import AlbionApi from './AlbionApi.js';
 
@@ -16,7 +16,7 @@ const DB_JSON_PATH = './database/.db.json';
 
 function loadJsonDb() {
     if (!existsSync(DB_JSON_PATH)) {
-        const defaults = { recents: { battleId: 0, eventId: 0 } };
+        const defaults = {recents: {battleId: 0, eventId: 0}};
         writeFileSync(DB_JSON_PATH, JSON.stringify(defaults, null, 2));
         return defaults;
     }
@@ -24,7 +24,7 @@ function loadJsonDb() {
         return JSON.parse(readFileSync(DB_JSON_PATH, 'utf8'));
     } catch {
         console.error('Corrupted JSON db, resetting.');
-        const defaults = { recents: { battleId: 0, eventId: 0 } };
+        const defaults = {recents: {battleId: 0, eventId: 0}};
         writeFileSync(DB_JSON_PATH, JSON.stringify(defaults, null, 2));
         return defaults;
     }
@@ -38,7 +38,7 @@ export default class KillBot {
     constructor(bot, sqlite3) {
         this.jsonDb = loadJsonDb();
         if (!this.jsonDb.recents) {
-            this.jsonDb.recents = { battleId: 0, eventId: 0 };
+            this.jsonDb.recents = {battleId: 0, eventId: 0};
             saveJsonDb(this.jsonDb);
         }
 
@@ -70,26 +70,29 @@ export default class KillBot {
      */
     async checkKills(startPos = 0, minRangeId = this.lastEventId, maxRangeId = 0) {
         try {
-            const events = await this.albionApi.getEvents({ limit: 51, offset: startPos * 51 });
+            const events = await this.albionApi.getEvents({limit: 51, offset: startPos * 51});
             if (!events?.length) return;
 
             events.sort((a, b) => a.EventId - b.EventId);
             const minEventId = events[0].EventId;
             const maxEventId = events[events.length - 1].EventId;
             const range = await this.getInRange(minEventId, maxEventId);
-            this.log(startPos, '; last:', minRangeId, 'min:', minEventId, 'max:', maxEventId, 'range:', range.length);
+            this.log('lst:', minRangeId, 'start:', startPos, 'range:', range.length);
+            this.log('min:', minEventId);
+            this.log('max:', maxEventId);
 
             if (minEventId > minRangeId && startPos < 5) {
                 await this.checkKills(startPos + 1, minRangeId, minEventId);
             }
 
-            const filtered = events.filter(event =>
-                event.EventId > minRangeId
-                && (!maxRangeId || event.EventId < maxRangeId)
-                && !range.includes(event.EventId)
-                && (TRACK_GUILDS.includes(event.Killer.GuildName) || TRACK_GUILDS.includes(event.Victim.GuildName))
-                && event.TotalVictimKillFame > KILL_MIN_FAME
-            );
+            const filtered = events.filter(event => {
+                return event.EventId > minRangeId
+                    && (!maxRangeId || event.EventId < maxRangeId)
+                    && !range.includes(event.EventId)
+                    && (!TRACK_GUILDS.length || TRACK_GUILDS.includes(event.Killer.GuildName) || TRACK_GUILDS.includes(event.Victim.GuildName))
+                    && event.TotalVictimKillFame > KILL_MIN_FAME
+            });
+            this.log('filtered events: ', filtered.length)
 
             filtered.forEach(event => this.sendKillReport(event));
             await this.saveRange(startPos, filtered.map(e => e.EventId), maxEventId);
@@ -111,7 +114,7 @@ export default class KillBot {
                     title: '',
                     description: '',
                     color: isFriendlyKill ? 0x00FF00 : 0xFF0000,
-                    image: { url: 'attachment://kill.png' },
+                    image: {url: 'attachment://kill.png'},
                 };
 
                 if (event.TotalVictimKillFame > KILL_MIN_FAME) {
@@ -128,7 +131,7 @@ export default class KillBot {
                         if (item.DamageDone) acc.dd.push(record);
                         if (item.SupportHealingDone) acc.heal.push(record);
                         return acc;
-                    }, { dd: [], heal: [] });
+                    }, {dd: [], heal: []});
 
                     if (assistant.dd.length) {
                         embed.fields.push({
@@ -152,8 +155,8 @@ export default class KillBot {
                     return;
                 }
 
-                const attachment = new AttachmentBuilder(imgBufferVictim, { name: 'kill.png' });
-                return channel.send({ embeds: [embed], files: [attachment] });
+                const attachment = new AttachmentBuilder(imgBufferVictim, {name: 'kill.png'});
+                return channel.send({embeds: [embed], files: [attachment]});
             })
             .then(() => {
                 this.log(`Kill posted: ${this.createDisplayName(event.Killer)} → ${this.createDisplayName(event.Victim)}`);
@@ -169,12 +172,13 @@ export default class KillBot {
     async checkBattles() {
         this.log('Checking battles...');
         try {
-            const battles = await this.albionApi.getBattles({ limit: 20, offset: 0 });
+            const battles = await this.albionApi.getBattles({limit: 20, offset: 0});
             battles
                 .filter(battleData => battleData.id > this.lastBattleId)
                 .map(battleData => new Battle(battleData))
                 .filter(battle => battle.players.length >= BATTLE_MIN_PLAYER)
                 .filter(battle => {
+                    if (!TRACK_GUILDS.length) return true;
                     const relevantPlayerCount = TRACK_GUILDS.reduce((total, guildName) => {
                         return total + (battle.guilds.has(guildName)
                             ? battle.guilds.get(guildName).players.length
@@ -197,7 +201,7 @@ export default class KillBot {
 
         const title = battle.rankedFactions.slice()
             .sort((a, b) => b.players.length - a.players.length)
-            .map(({ name, players }) => `${name}(${players.length})`)
+            .map(({name, players}) => `${name}(${players.length})`)
             .join(' vs ');
 
         const thumbnailUrl = battle.players.length >= 100
@@ -208,7 +212,7 @@ export default class KillBot {
                     ? 'https://storage.googleapis.com/albion-images/static/5v5-3.png'
                     : 'https://storage.googleapis.com/albion-images/static/PvP-10.png';
 
-        let fields = battle.rankedFactions.map(({ name, kills, deaths, killFame, factionType }, i) => ({
+        let fields = battle.rankedFactions.map(({name, kills, deaths, killFame, factionType}, i) => ({
             name: `${i + 1}. ${name} - ${killFame.toLocaleString()} Fame`,
             inline: true,
             value: [
@@ -216,21 +220,21 @@ export default class KillBot {
                 `Deaths: ${deaths}`,
                 factionType === 'alliance' ? '\n__**Guilds**__' : '',
                 Array.from(battle.guilds.values())
-                    .filter(({ alliance }) => alliance === name)
+                    .filter(({alliance}) => alliance === name)
                     .sort((a, b) => battle.guilds.get(b.name).players.length - battle.guilds.get(a.name).players.length)
-                    .map(({ name }) => `${name} (${battle.guilds.get(name).players.length})`)
+                    .map(({name}) => `${name} (${battle.guilds.get(name).players.length})`)
                     .join('\n'),
             ].join('\n'),
         }));
 
         if (battle.is5v5) {
-            fields = battle.rankedFactions.map(({ name, kills, players }) => ({
+            fields = battle.rankedFactions.map(({name, kills, players}) => ({
                 name: `${name} [Kills: ${kills}]`,
                 inline: true,
                 value: players
                     .sort((a, b) => a.name.toLowerCase() < b.name.toLowerCase() ? -1 : 1)
                     .sort((a, b) => b.kills - a.kills)
-                    .map(({ name, kills, deaths }) => `${deaths ? '~~' : ''}${name}${deaths ? '~~' : ''}: ${kills} Kills`)
+                    .map(({name, kills, deaths}) => `${deaths ? '~~' : ''}${name}${deaths ? '~~' : ''}: ${kills} Kills`)
                     .join('\n'),
             }));
         }
@@ -249,8 +253,8 @@ export default class KillBot {
                 : title,
             color: didWin ? 0x00FF00 : 0xFF0000,
             timestamp: battle.endTime,
-            thumbnail: { url: thumbnailUrl },
-            image: { url: 'https://storage.googleapis.com/albion-images/static/spacer.png' },
+            thumbnail: {url: thumbnailUrl},
+            image: {url: 'https://storage.googleapis.com/albion-images/static/spacer.png'},
             fields,
         };
 
@@ -260,7 +264,7 @@ export default class KillBot {
             return;
         }
 
-        channel.send({ embeds: [embed] })
+        channel.send({embeds: [embed]})
             .then(() => this.log(`Battle posted: ${title}`))
             .catch(err => this.log('sendBattleReport error:', err));
     }
@@ -290,7 +294,9 @@ export default class KillBot {
         if (saveEventList.length) {
             const placeholders = saveEventList.map(() => '(?)').join(', ');
             await this.dbRun(
-                `REPLACE INTO eventIds (eventId) VALUES ${placeholders}`,
+                `REPLACE
+                INTO eventIds (eventId) VALUES
+                ${placeholders}`,
                 saveEventList
             );
         }
