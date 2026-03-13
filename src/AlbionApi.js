@@ -1,22 +1,14 @@
 const API_URL = 'https://gameinfo.albiononline.com/api/gameinfo';
 
 export default class AlbionApi {
-    rand(min, max) {
-        return Math.floor(Math.random() * (max - min + 1)) + min;
-    }
-
     /**
      * Request a resource from the Albion Online API.
-     * @param baseUrl
-     * @param path
-     * @param queries
-     * @returns {Promise<unknown>}
      */
     async baseRequest(baseUrl, path, queries) {
-        const qs = queries
-            ? Object.entries(queries).map((query) => query.join('=')).join('&')
-            : '';
-        const url = `${baseUrl}${path}?${qs}&${this.rand(1, 1000)}`;
+        const params = new URLSearchParams(queries);
+        // Cache-bust param to prevent stale responses from CDN/proxies
+        params.set('_', Date.now());
+        const url = `${baseUrl}${path}?${params}`;
 
         const response = await fetch(url, {
             headers: {
@@ -25,40 +17,31 @@ export default class AlbionApi {
             },
         });
 
-        if (response.status === 404) {
-            throw response;
+        if (!response.ok) {
+            throw new Error(`API request failed: ${response.status} ${response.statusText} — ${path}`);
         }
 
         const text = await response.text();
-        const requestBody = text.replace(/\n/g, ' ').replace(/\r/g, '').trim();
         try {
-            return JSON.parse(requestBody);
-        } catch (error) {
-            throw new Error(`JSON parse error - ${path}\n${requestBody}`);
+            return JSON.parse(text.replace(/\n/g, ' ').replace(/\r/g, '').trim());
+        } catch {
+            throw new Error(`JSON parse error — ${path}`);
         }
     }
 
-    /**
-     * Get an array of Kills.
-     */
     getEvents(options = {}) {
-        const queries = {
+        return this.baseRequest(API_URL, '/events', {
             limit: options.limit || 51,
             offset: options.offset || 0,
             sort: options.sort || 'recent',
-        };
-        return this.baseRequest(API_URL, `/events`, queries);
+        });
     }
 
-    /**
-     * Get an array of Battles.
-     */
     getBattles(options = {}) {
-        const queries = {
+        return this.baseRequest(API_URL, '/battles', {
             limit: options.limit || 51,
             offset: options.offset || 0,
             sort: options.sort || 'recent',
-        };
-        return this.baseRequest(API_URL, `/battles`, queries);
+        });
     }
 }
