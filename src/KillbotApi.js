@@ -92,7 +92,7 @@ export default class KillBot {
                     && (!TRACK_GUILDS.length || TRACK_GUILDS.includes(event.Killer.GuildName) || TRACK_GUILDS.includes(event.Victim.GuildName))
                     && event.TotalVictimKillFame > KILL_MIN_FAME
             });
-            this.log('filtered events: ', filtered.length)
+            this.log('filtered events: ', filtered.length, TRACK_GUILDS)
 
             filtered.forEach(event => this.sendKillReport(event));
             await this.saveRange(startPos, filtered.map(e => e.EventId), maxEventId);
