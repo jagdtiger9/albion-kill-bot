@@ -86,13 +86,16 @@ export default class KillBot {
             }
 
             const filtered = events.filter(event => {
+                //console.log(event.Killer.GuildName)
                 return event.EventId > minRangeId
                     && (!maxRangeId || event.EventId < maxRangeId)
                     && !range.includes(event.EventId)
                     && (!TRACK_GUILDS.length || TRACK_GUILDS.includes(event.Killer.GuildName) || TRACK_GUILDS.includes(event.Victim.GuildName))
                     && event.TotalVictimKillFame > KILL_MIN_FAME
             });
-            this.log('filtered events: ', filtered.length, TRACK_GUILDS)
+            if (filtered.length) {
+                this.log('filtered events: ', filtered.length, TRACK_GUILDS)
+            }
 
             filtered.forEach(event => this.sendKillReport(event));
             await this.saveRange(startPos, filtered.map(e => e.EventId), maxEventId);
