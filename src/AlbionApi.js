@@ -1,4 +1,7 @@
-const API_URL = 'https://gameinfo.albiononline.com/api/gameinfo';
+// Albion Americas (Washington): https://gameinfo.albiononline.com/api/gameinfo/
+// Albion Europe (Amsterdam): https://gameinfo-ams.albiononline.com/api/gameinfo/
+// Albion Asia (Singapore): https://gameinfo-sgp.albiononline.com/api/gameinfo/
+const API_URL = 'https://gameinfo-ams.albiononline.com/api/gameinfo';
 
 export default class AlbionApi {
     /**
